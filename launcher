@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+
+# Get absolute directory where this script resides
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+GAMES_DIR="$SCRIPT_DIR/games"
+STATE_FILE="$SCRIPT_DIR/.installed"
+
+# --- Self-Installer (First-Time Run Check) ---
+if [ ! -f "$STATE_FILE" ]; then
+    clear
+    echo -e "\033[36m"
+    echo "==============================================================="
+    echo "           ASCII-ARCADE FIRST-TIME SETUP & INSTALLER           "
+    echo "==============================================================="
+    echo -e "\033[0m"
+    echo "Detecting first-time run... Setting up global 'ascii-arcade' command."
+    echo "This will allow you to type 'ascii-arcade' from anywhere."
+    echo ""
+    
+    WRAPPER_PATH="/usr/local/bin/ascii-arcade"
+    CURRENT_SCRIPT="$(realpath "$0")"
+    
+    # Automatically generate global wrapper using sudo
+    if sudo bash -c "echo '#!/usr/bin/env bash' > '$WRAPPER_PATH' && echo 'cd \"$SCRIPT_DIR\" && \"$CURRENT_SCRIPT\"' >> '$WRAPPER_PATH' && chmod +x '$WRAPPER_PATH'"; then
+        touch "$STATE_FILE"
+        echo -e "\n\033[32m[SUCCESS] Installation complete! Global command 'ascii-arcade' is ready.\033[0m"
+    else
+        echo -e "\n\033[31m[NOTICE] Sudo installation skipped or failed. You can still run it locally.\033[0m"
+    fi
+    echo ""
+    read -p "Press Enter to launch ASCII-Arcade..."
+fi
+
+if [ ! -d "$GAMES_DIR" ]; then
+    echo "Error: '$GAMES_DIR' directory not found!"
+    exit 1
+fi
+
+while true; do
+    clear
+    # Colorful Title Header
+    echo -e "\033[36m"
+    echo "    _    ____   ____ ___ ___         _    ____   _____    _    ____  _____" 
+    echo "   / \  / ___| / ___|_ _|_ _|       / \  |  _ \ / ____|  / \  |  _ \| ____|"
+    echo "  / _ \ \___ \| |    | | | | _____ / _ \ | |_) | |      / _ \ | | | |  _|  "
+    echo " / ___ \ ___) | |___ | | | | _____/ ___ \|  _ <| |____ / ___ \| |_| | |___ "
+    echo "/_/   \_\____/ \____|___|___|    /_/   \_|_| \_\\_____|/_/   \_\____/|_____|"
+    echo -e "\033[0m"
+
+    # Decorative Top Border Box
+    echo -e "\033[33m╔══════════════════════════════════════════════════════════════╗\033[0m"
+    echo -e "\033[33m║\033[0m                    \033[1mSELECT A GAME TO PLAY\033[0m                     \033[33m║\033[0m"
+    echo -e "\033[33m╠══════════════════════════════════════════════════════════════╣\033[0m"
+
+    names=()
+    paths=()
+    i=1
+
+    for game_dir in "$GAMES_DIR"/*/; do
+        [ -d "$game_dir" ] || continue
+        
+        run_script="${game_dir}run"
+        
+        if [ -f "$run_script" ] && [ -x "$run_script" ]; then
+            folder_name=$(basename "$game_dir")
+            
+            desc=$(grep -i "^# Description:" "$run_script" | cut -d ':' -f2- | xargs)
+            if [ -z "$desc" ]; then
+                desc="Launch $folder_name"
+            fi
+            
+            display_name=$(echo "$folder_name" | tr '-_' ' ' | awk '{for(j=1;j<=NF;j++)sub(/^./,toupper(substr($j,1,1)),$j)}1')
+            
+            # Format each row nicely inside an ASCII box
+            printf "\033[33m║\033[0m \033[32m[%2d]\033[0m \033[1m%-16s\033[0m - \033[35m%-35s\033[33m║\033[0m\n" "$i" "$display_name" "$desc"
+            names+=("$folder_name")
+            paths+=("$run_script")
+            ((i++))
+        fi
+    done
+
+    # Bottom border options with fixed padding alignment
+    echo -e "\033[33m╠══════════════════════════════════════════════════════════════╣\033[0m"
+    printf "\033[33m║\033[0m \033[31m[0]\033[0m \033[1m%-57s\033[33m║\033[0m\n" "Exit ASCII-Arcade"
+    echo -e "\033[33m╚══════════════════════════════════════════════════════════════╝\033[0m"
+    echo ""
+    
+    read -p "Select option [0-$((i-1))]: " choice
+
+    if [[ "$choice" =~ ^[0]+$ ]]; then
+        clear
+        echo -e "\033[31mExiting ASCII-Arcade. Goodbye!\033[0m"
+        exit 0
+    elif [[ "$choice" =~ ^[1-9][0-9]*$ ]] && [ "$choice" -lt "$i" ]; then
+        index=$((choice - 1))
+        selected_run="${paths[$index]}"
+        selected_name="${names[$index]}"
+
+        clear
+        echo -e "\033[36mLaunching $selected_name...\033[0m"
+        echo "--------------------------------------------------------------"
+        
+        "$selected_run"
+        
+        echo ""
+        echo "--------------------------------------------------------------"
+        read -p "Press Enter to return to ASCII-Arcade..."
+    else
+        echo -e "\033[31mInvalid selection. Try again.\033[0m"
+        sleep 1
+    fi
+done
